@@ -51,7 +51,7 @@
 % Tblock = getTblockTemplate();
 % %% update Tblock with xls table and EEG data
 
-
+%%%
 
 NrowsXls = size(TblockXls,1); loadedFileName = 'nicnemame'; %loadedFileName = '210330_122311_000';
 for IDblock =24:NrowsXls
