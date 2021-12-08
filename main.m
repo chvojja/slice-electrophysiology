@@ -1,60 +1,20 @@
-% %clear all;
-% 
-% %% Definition of available stimuli
-% % labels of stimulation parameters
-% labelsLight = {'noLight','light_','light__','light___'};
-% labelsPulses = {'x10ms','x500ms','x1s','x3s','x10s'};
-% 
-% % stimulation protocol structure
-% p = struct; 
-% p = setProtocolStructByNameWidthPeriodPulses(p,'x10ms',0.01,3,50); % POZOR JE TO 100ms
-% p = setProtocolStructByNameWidthPeriodPulses(p,'x500ms',0.5,5,100); %500ms 5s period 100pulses
-% p = setProtocolStructByNameWidthPeriodPulses(p,'x1s',1,5,100);
-% p = setProtocolStructByNameWidthPeriodPulses(p,'x3s',1,5,5);
-% p = setProtocolStructByNameWidthPeriodPulses(p,'x10s',10,17.8,1);
-% 
-% 
-% 
-% %% get Erikas .xlsx with information about each block of stimulation 
-% fp_Tstim='Z:\Petranova\SST, CHR2 H134R\table_slicestim_SST_CHR2_H134R.xlsx';
-% 
-% % ImportOptions_ = detectImportOptions(fp_Tstim, 'NumHeaderLines', 1);
-% % TblockXls = readtable(fp_Tstim,ImportOptions_);
-% % save('TblockXls','TblockXls'); % save for testing purpose
-% 
-% load('TblockXls','TblockXls');
-% 
-% % get xls table statistics
-% 
-% Tstats = table('Size',[5 4],'VariableTypes',repmat({'double'},1,4),'VariableNames',labelsLight,'RowNames',labelsPulses);
-% 
-% for ip=1:numel(labelsPulses)
-%     pulseType = labelsPulses{ip};
-%     for il=1:numel(labelsLight)
-%         lightType = labelsLight{il};
-%         contains = strcmpi(TblockXls.(pulseType),'x') & strcmpi(TblockXls.(lightType),'x') & strcmpi(TblockXls.notes,''); % only "x" and only with empty "note" column
-%         Tstats{pulseType,lightType}  = numel(find(contains));
-%     end
-%     
-% end
-% 
-% 
-% %isempty(TblockXls.light_{1})
-% 
-% 
-% %% get a list with all .smrx files and path to them
-% p_EEG = 'Z:\Petranova\SST, CHR2 H134R\recordings';
-% flist = dir([p_EEG '\**\*.smrx']);  % file list
-% 
-% 
-% 
-% Tblock = getTblockTemplate();
-% %% update Tblock with xls table and EEG data
 
-%%%
+
+%% update Tblock with xls table and EEG data
+
+%%
 
 NrowsXls = size(TblockXls,1); loadedFileName = 'nicnemame'; %loadedFileName = '210330_122311_000';
-for IDblock =24:NrowsXls
+while true
+        % get IDblock if the process has been interrupted
+        IDblock = getTableNextRow(Tblock,'done'); % find not processed row
+        
+%         notDoneID = find(~(Tblock.done(1:IDblock)));
+%         if ~isempty(notDoneID)
+%             IDblock = min(notDoneID);
+%         end
+        if IDblock>NrowsXls, break; end;
+        
         %file name
         fn = TblockXls.FileName{IDblock};
         
@@ -68,8 +28,9 @@ for IDblock =24:NrowsXls
             % load
             lf = loadSmrxV4(fp);
             fs = lf.T.SamplingFreq(lf.T.Title == 'sig');
-            fs = fs/2;
+            
             downFactor = 2;
+            fs = fs/downFactor;
             lf.T = downsampleTable(lf.T,downFactor);
            
             
@@ -98,11 +59,12 @@ for IDblock =24:NrowsXls
             sig = double(lf.T.Signal{lf.T.Title == 'sig'});
             NsamplesInFile = numel(sig);
             
-            s.t_dn = linspace(lf.timeRecStartDn,lf.timeRecEndDn,NsamplesInFile)'; % timeline in datenum (just for fun...ha ha)
-            
-            s = preprocessInVitroLFP(sig,fs);
-            clear sig
 
+            s = preprocessInVitroLFP(sig,fs);
+            
+            clear sig
+            
+            
             % preprocessing of stimulation signal
             % transform stimulation signal to logicals and compute onsets
             treshold = 2.5;
@@ -115,6 +77,7 @@ for IDblock =24:NrowsXls
             s.stimOnsets = stimonofs.onSignal;
             clear stimonofs
       
+            s.t_dn = linspace(lf.timeRecStartDn,lf.timeRecEndDn,NsamplesInFile)'; % timeline in datenum (just for fun...ha ha)
             
             %plot(s.stim)
               
@@ -129,9 +92,10 @@ for IDblock =24:NrowsXls
         % we have the correct file loaded, preprocessed, now let's find a block of EEG,
         % analyze it and save.
         Tblock.FileName(IDblock)=fn; % save filename
-        %Tblock.date(rp)=; % date
+        Tblock.date(IDblock)=datestr(s.t_dn(1),'dd/mm/yyyy'); % date
         Tblock.slice(IDblock)=num2str(rezNumber); % slice
-        Tblock.IDblock(IDblock)=num2str(IDblock); % slice % tohle nevim jestli by nebylo lepsi krokovat od jedne pro kazdy rez
+        Tblock.fs(IDblock)= fs;
+        Tblock.IDblock(IDblock)=IDblock; 
         %Tblock.FileName{rp}=
         
         %zpracovat ty spatne bloky
@@ -154,6 +118,8 @@ for IDblock =24:NrowsXls
         nextEndInd = futureStimOnsetsInd(    p.(char(Tblock.pulse(IDblock))).pulses   ) + round(p.(char(Tblock.pulse(IDblock))).periodSec*fs);
         nextLenInd = nextEndInd - nextStartInd +1;
         
+        
+        
         % check if the observed stimuli matches the claimed one.
         claimedStimDurationSec = p.(char(Tblock.pulse(IDblock))).totalDurationSec;
         claimedDuty = p.(char(Tblock.pulse(IDblock))).percentHi;
@@ -166,12 +132,125 @@ for IDblock =24:NrowsXls
         end
 
       
+       Tblock.startSec(IDblock)=(nextStartInd/fs);
+       Tblock.endSec(IDblock)=(nextEndInd/fs);
        sc = cropStruct(s,nextStartInd,nextEndInd);
        %plot(Tblock.signal{rp}.noDCnoArt,'k')
-       Tblock.signal{IDblock} = sc;
+       %Tblock.signal{IDblock} = sc;
+       %save(fullfile(p_block_signal, [ num2str(IDblock) '.mat']),'sc'); 
        disp('block saved to a table');
        
-      
+%% Now we have all recordings in Tblock table, run through all the blocks again but now address the IEDs
+
+       % now lets compute onsets of IEDs from both high frequnency RMS and
+       % higest derivative of median (the lower freq component)
+       % this part of the script is very cool indeed
+        windowN = 200;
+       [env,thr] = thresholdTwoClusterSignal(sc.abshf, windowN);
+       %
+       diffMed = [abs(diff(sc.med)); 0];
+       windowN = 300;
+       [env2,thr2] = thresholdTwoClusterSignal( diffMed , windowN);
+
+       windowN = 100;
+       [env3,thr3] = thresholdTwoClusterSignal( env2.*env , windowN);
+       %plot(env3); hold on; plot(thr3*ones(size(env3)));
+       
+       % set some reasonable margin in ms that every event closer than that
+       % will be 
+       % connect everything shorter than
+       connectMargin_ms = 250;
+       connectMargin_N = round(fs*connectMargin_ms/1000);
+       envTh = getConsecutiveElements(env3>thr3,connectMargin_N);
+       
+
+       of = getOnsetOffsetByThreshold(envTh,thr3);
+       sc.IEDonsets = of.onSignal;
+       IEDonoffInd = of.onoffdur;
+%        plot(sc.noDC);
+%        hold on;
+%        plot(env3);
+%        plot(IEDonsets);
+%        plot(0.9*duration);
+
+        % This is so cool, we have onsets of IEDs !!! great work, Emsik.
+        % You deserve a medal. And definitely not from president Zeman!
+
+       % now we will put each IED into a IED table
+
+       stimOnsetsInd=find(sc.stimOnsets);
+  
+       Nied=numel(IEDonoffInd(:,1));
+       for kied=1:Nied
+     
+           %save to table
+           IDied = getTableNextRow(Tied,'IDied');
+           Tied.IDied(IDied) = IDied; 
+           Tied.IDblock(IDied) = IDblock;
+           Tied.startInBlockI(IDied) = IEDonoffInd(kied,1);
+
+           allStimsBeforeIED = stimOnsetsInd<IEDonoffInd(kied,1);
+           Tied.lastStimBefore(IDied) = IEDonoffInd(kied,1) -  max( stimOnsetsInd(allStimsBeforeIED) );
+           % now width , amp, frequency...
+           
+           % find the end of HFO
+           
+           preMargin = 120;
+           
+           Ind=ooRectify(IEDonoffInd(kied,[1 2])+[preMargin 2500],[1 numel(sc.abshf)]);
+           
+           IEDsignal=sc.noDCnoArt(Ind(1):Ind(2));
+           
+           
+           minN=400;
+           maxN = 2000;
+           connectShorterThanN = 100;
+           
+           [oo,stats] = signal2eventsByMinMaxLength(sig,minN,maxN,connectShorterThanN);
+           
+           %%% tohle pujde pryc
+           [env,thr] = thresholdTwoClusterSignal(sc.noDCnoArt(Ind(1):Ind(2)), 200);
+           
+           iedWidth = min(find(env<thr))+preMargin;
+               
+           
+            Fpass = 200;
+            Fstop = 150;
+            Apass = 0.5;
+            Astop = 65;
+         
+            d = designfilt('highpassiir', ...
+              'PassbandFrequency',Fpass,'StopbandFrequency',Fstop, ...
+              'PassbandRipple',Apass,'StopbandAttenuation',Astop, ...
+              'DesignMethod','butter','SampleRate',fs);
+            %fvtool(d)
+            %fpass = 0.05; 
+            %[s_hp,dhp] = highpass(lf.T.Signal{lf.T.Title == 'sig'}(a:b),fpass,fs,'ImpulseResponse','iir','Steepness',0.5);  
+            
+            IEDsignalHFO = filtfilt(d,IEDsignal);
+            
+            [env,thr] = thresholdTwoClusterSignal(abs(IEDsignalHFO), 1,true);
+            
+          
+           
+           Tied.IEDwidth(IDied) = iedWidth/fs;
+           
+           Ind=ooRectify(IEDonoffInd(kied,[1 2])+[0 500],[1 numel(sc.med)]);
+           medMinMax = sc.med(Ind(1):Ind(2));
+           
+           Tied.IEDamp(IDied) = max(medMinMax)-min(medMinMax);
+           
+           Ind=ooRectify(IEDonoffInd(kied,[1 2])+[preMargin iedWidth+preMargin],[1 numel(sc.noDCnoArt)]);
+           [f,absH,faxis]= getFreqStockwell(sc.noDCnoArt(Ind(1):Ind(2)),fs);
+           Tied.HFOfreq(IDied)  = f;
+           Tied.HFOpwr(IDied) =   mean(sc.hf(IEDonoffInd(kied,1):IEDonoffInd(kied,2)).^2);   % rms value of filtred signal fd of the size rms_length
+           
+           plotit;
+
+       end
+       
+       
+       
 %        sm = medfilt1(sc.abshf,2000);
 %        plot(sm)
 %         [pks,locs,w,p] = findpeaks(sc.abshf);
@@ -189,87 +268,16 @@ for IDblock =24:NrowsXls
 
         
         disp(['computed ' num2str(IDblock)]);
+        Tblock.done(IDblock)=true;
+        clear sc
+        clear env env2 env3 diffMed
  
 end
 
 
-%% Now we have all recordings in Tblock table, run through all the blocks again but now address the IEDs
-Tied = getTiedTemplate(5000);
-for IDblock =1:NrowsXls
-
-       % now lets compute onsets of IEDs from both high frequnency RMS and
-       % higest derivative of median (the lower freq component)
-       % this part of the script is very cool indeed
-        windowN = 200;
-       [env,thr] = thresholdTwoClusterSignal(sc.abshf, windowN);
-       %
-       diffMed = [abs(diff(sc.med)); 0];
-       windowN = 300;
-       [env2,thr2] = thresholdTwoClusterSignal( diffMed , windowN);
-   
-       windowN = 100;
-       [env3,thr3] = thresholdTwoClusterSignal( env2.*env , windowN);
-       plot(env3); hold on; plot(thr3*ones(size(env3)));
-       
-       
-       of = getOnsetOffsetByThreshold(env3,thr3);
-       sc.IEDonsets = of.onSignal;
-       IEDonoffInd = of.onoffdur;
-%        plot(sc.noDC);
-%        hold on;
-%        plot(env3);
-%        plot(IEDonsets);
-%        plot(0.9*duration);
-
-        % This is so cool, we have onsets of IEDs !!! great work, Emsik.
-        % You deserve a medal. And definitely not from president Zeman!
-        
-       % now we will put each IED into a IED table
-       
-       
-       
-       stimOnsetsInd=find(sc.stimOnsets);
-
-       Nied=numel(IEDonoffInd(:,1));
-       for kied=1:Nied
-           IEDonInd(kied);
-            
-           %save to table
-           IDied = getTableNextEmptyRow(Tied,'IDied');
-           Tied.IDied(IDied) = IDied; 
-           Tied.IDblock(IDied) = IDblock;
-           Tied.startInBlockI(IDied) = IEDonoffInd(kied,1);
-           
-           allStimsBeforeIED = stimOnsetsInd<IEDonoffInd(kied,1);
-           Tied.lastStimBefore(IDied) = IEDonoffInd(kied,1) -  max( stimOnsetsInd(allStimsBeforeIED) );
-           
-           
-           
-       end
-end
 
 
 
-%% Support functions
-function Tblock = getTblockTemplate()
-% this can be standalone function
-% definition of a table of blocks
-% this table is the main data type in the analysis
-% a row in the table represents a "block" - a part of EEG with parameters:
-varTypes = {'categorical','categorical','categorical','categorical','cell',  'double' ,'logical','categorical', 'categorical',    'double',  'double'  };
-varNames = {'IDblock', 'FileName',     'date',       'slice'    , 'signal','fs',     'valid',       'light',       'pulse',      'startDn','endDn'   };
-Tblock = table('Size',[1,numel(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
-end
-
-function Tied = getTiedTemplate(Nrows)
-% this can be standalone function
-% definition of a table of blocks
-% this table is the main data type in the analysis
-% a row in the table represents a "block" - a part of EEG with parameters:
-varTypes = {'categorical', 'categorical', 'double',      'double',      'double',           'double',  'double', 'double'  , 'double'};
-varNames = {'IDied',        'IDblock',    'startInBlockI', 'endInBlockI', 'lastStimBefore',   'SLEwidth','SLEamp',  'HFOfreq','HFOpwr'};
-Tied = table('Size',[Nrows,numel(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
-end
 
 
 
@@ -303,15 +311,7 @@ function  y = cropStruct(s,nextStartInd,nextEndInd)
 end
 
 
-function p_structure = setProtocolStructByNameWidthPeriodPulses(p_structure, name,widthSec,periodSec,pulses)
-        % define stimulation sequence
-        p_structure.(name).pulses = pulses;
-        p_structure.(name).widthSec = widthSec;
-        p_structure.(name).periodSec = periodSec;
-        p_structure.(name).totalDurationSec = pulses*periodSec; % total length of stimualtion 
-        p_structure.(name).percentHi=(pulses*widthSec)/(pulses*periodSec); % percent of time being hi state
-         
-end
+
 
 
 function s = preprocessInVitroLFP(sig,fs)
@@ -343,8 +343,8 @@ function s = preprocessInVitroLFP(sig,fs)
             nastd = 12;
             nstd = 8;
             stdNoDC = std(noDC); % std of no dc signal
-            medHFlen = 0.0075*fs; % 50
-            medLlen = 0.0025*fs; %150
+            medHFlen = round(0.0075*fs); % 50
+            medLlen = round(0.0025*fs); %150
             medL = medfilt1(noDC,medLlen);
             s.abshf=abs(s.hf);
             s.medHF = medfilt1(s.abshf,medHFlen);
@@ -375,26 +375,6 @@ function s = preprocessInVitroLFP(sig,fs)
 end
 
 
-function rms = getRMSpower(sig,fs,rmsLen_ms)
-        rmsLen=round(rmsLen_ms*10^-3*fs);
-        rms=zeros(size(sig));
-
-        seg_down=floor((rmsLen-1)/2);
-        seg_up=ceil((rmsLen-1)/2);
-        for i=1:size(sig,1)
-            seg_start=i-seg_down; %nastaveni zacatku segmentu
-            seg_end=i+seg_up; %nastaveni konce segmentu
-            if seg_start<1 %korekce u zacatku signalu
-                seg_start=1;
-            end
-            if seg_end>size(sig,1) %korekce u konce signalu
-                seg_end=size(sig,1);
-            end
-            rms(i,:)=sqrt(  mean(sig(seg_start:seg_end,:).^2));   % rms value of filtred signal fd of the size rms_length 
-        end
-        
-end
-
 
 function T = downsampleTable(T,fsFactor)
 % downsample by fsFactor
@@ -409,50 +389,7 @@ end
             
 end
 
-function [envHigh,thr] =  thresholdTwoClusterSignal(x, windowN)
-% estimates best threshold based on some noisy rectified (power) data
-% windowN = delka s jakou se to ma vyhladit
-% this is fucking hard function I dont know how to describe it
-       [envHigh, envLow] = envelope(x,windowN,'rms');
-       [hc,edg]=histcounts(envHigh);
-       
-       hc=20*log10(hc);
-       hc(hc==-Inf)=0;  % this is very important@!!!!!!!!
-       hc =  medfilt1(hc,ceil(numel(hc)/20));
-       
-       %figure; plot( )
-       
-       [~,locs,~,pp] = findpeaks(hc);
-       amplifiedPP=hc(locs).*pp;
-       
-       [~,sI] = sort(amplifiedPP,'descend');
-       firstSecondLocIin_hc = locs(sI(1:2));
-       
-       
-       %[sIs,~] = sort(sI(1:2),'ascend');
-       [firstSecondLocIin_hcs,~] = sort(firstSecondLocIin_hc,'ascend');
-       
-       [~,locs2,~,pp2] = findpeaks(-hc(firstSecondLocIin_hcs(1):firstSecondLocIin_hcs(2)));
-       amplifiedPPInv=hc(locs2).*pp2;
-       
-       [sm,smI] = sort(amplifiedPPInv,'descend');
-       %midI = locs2(smI(1));
-       %locmidI = locs(sIs(1) + smI(1));
-       locminimumIin_hc = firstSecondLocIin_hcs(1)+locs2(smI(1))-1;
-       
-%         hold on;
-%         plot(hc);
-%         plot(locminimumIin_hc,hc(locminimumIin_hc),'ko');
-%         plot(firstSecondLocIin_hc,hc(firstSecondLocIin_hc),'kx');
-% %     
-%        
-       if abs(firstSecondLocIin_hc+1)>sum(abs(firstSecondLocIin_hc-locminimumIin_hc))
-           thr = edg(locminimumIin_hc);
-           
-       else
-           thr = mean(edg(firstSecondLocIin_hc));
-       end
-end
+
 
 
 function y = getOnsetOffsetByThreshold(x,treshold)
@@ -460,6 +397,7 @@ function y = getOnsetOffsetByThreshold(x,treshold)
 % onoffduration is of length nummber of onsets
 % on of duration
 % on off duration
+            x=x(:);
            y.squareSignal = x > treshold;
            so = diff(y.squareSignal);
            y.onSignal = [so>0;  false ];
@@ -467,11 +405,19 @@ function y = getOnsetOffsetByThreshold(x,treshold)
            
            ons = find(y.onSignal);
            offs =  find(y.offSignal);
-           y.onoffdur = [ons' offs'  offs'-ons']; 
+           y.onoffdur = [ons offs  offs-ons]; 
 end
 
 
-function y = getTableNextEmptyRow(T,column)
-isu = isundefined(T.(column));
-y = isu(1);
+function y = getTableNextRow(T,column)
+if iscategorical(T.(column))
+    isu = find(isundefined(T.(column)));
+    y = isu(1);
 end
+if isnumeric(T.(column)) || islogical(T.(column))
+     isz = find(~(T.(column)));
+    y = isz(1);
+end
+end
+
+
