@@ -146,14 +146,14 @@ while true
        % higest derivative of median (the lower freq component)
        % this part of the script is very cool indeed
         windowN = 200;
-       [env,thr] = thresholdTwoClusterSignal(sc.abshf, windowN);
+       [env,thr] = thresholdTwoClusterSignal(sc.abshf, windowN,false);
        %
        diffMed = [abs(diff(sc.med)); 0];
        windowN = 300;
-       [env2,thr2] = thresholdTwoClusterSignal( diffMed , windowN);
+       [env2,thr2] = thresholdTwoClusterSignal( diffMed , windowN,false);
 
        windowN = 100;
-       [env3,thr3] = thresholdTwoClusterSignal( env2.*env , windowN);
+       [env3,thr3] = thresholdTwoClusterSignal( env2.*env , windowN,false);
        %plot(env3); hold on; plot(thr3*ones(size(env3)));
        
        % set some reasonable margin in ms that every event closer than that
@@ -206,10 +206,14 @@ while true
            maxN = 2000;
            connectShorterThanN = 100;
            
-           [oo,stats] = signal2eventsByMinMaxLength(sig,minN,maxN,connectShorterThanN);
+           [oo,stats] = signal2eventsByMinMaxLength(sc.abshf(Ind(1):Ind(2)),minN,maxN,connectShorterThanN);
+           oo
+           tic
+           [oo,stats] = signal2eventsByMinMaxLength(sc.abshf,minN,maxN,connectShorterThanN);
+           toc
            
            %%% tohle pujde pryc
-           [env,thr] = thresholdTwoClusterSignal(sc.noDCnoArt(Ind(1):Ind(2)), 200);
+           [env,thr] = thresholdTwoClusterSignal(sc.abshf(Ind(1):Ind(2)), 200,false);
            
            iedWidth = min(find(env<thr))+preMargin;
                
