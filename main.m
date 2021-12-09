@@ -1,5 +1,5 @@
 
-
+clear pt
 %% update Tblock with xls table and EEG data
 
 %%
@@ -162,6 +162,11 @@ while true
        connectMargin_ms = 250;
        connectMargin_N = round(fs*connectMargin_ms/1000);
        envTh = getConsecutiveElements(env3>thr3,connectMargin_N);
+       envTh(1)=false; envTh(end)=false;
+       
+       removeMargin_ms = 1000; % remove everything longer
+       removeMargin_N = round(fs*removeMargin_ms/1000);
+       envTh = removeLongerThan(envTh,removeMargin_N);
        
 
        of = getOnsetOffsetByThreshold(envTh,thr3);
@@ -187,67 +192,47 @@ while true
            IDied = getTableNextRow(Tied,'IDied');
            Tied.IDied(IDied) = IDied; 
            Tied.IDblock(IDied) = IDblock;
-           Tied.startInBlockI(IDied) = IEDonoffInd(kied,1);
+           Tied.startInBlockInd(IDied) = IEDonoffInd(kied,1);
+           Tied.endInBlockInd(IDied) = IEDonoffInd(kied,2);
+        
 
            allStimsBeforeIED = stimOnsetsInd<IEDonoffInd(kied,1);
            Tied.lastStimBefore(IDied) = IEDonoffInd(kied,1) -  max( stimOnsetsInd(allStimsBeforeIED) );
            % now width , amp, frequency...
            
-           % find the end of HFO
+           % IED amplitude 
+           IEDInd=ooRectify(IEDonoffInd(kied,[1 2])+[-1000 2000],[1 numel(sc.abshf)]);
+           medMinMax = sc.med(IEDInd(1):IEDInd(2));
+           %plot(medMinMax);
+           Tied.IEDamp(IDied) = max(medMinMax)-min(medMinMax); 
            
+           
+           % Find the end of HFO 
            preMargin = 120;
+           HFOInd=ooRectify(IEDonoffInd(kied,[1 2])+[preMargin 2500],[1 numel(sc.abshf)]);
            
-           Ind=ooRectify(IEDonoffInd(kied,[1 2])+[preMargin 2500],[1 numel(sc.abshf)]);
-           
-           IEDsignal=sc.noDCnoArt(Ind(1):Ind(2));
-           
-           
+           %
            minN=400;
-           maxN = 2000;
-           connectShorterThanN = 100;
+           maxN = 2500;
+           connectCloserThanN = 200;
+           [oo,stats] = signal2eventsByMinMaxLength(sc.abshf(HFOInd(1):HFOInd(2)),minN,maxN,connectCloserThanN);
+        
+%            tic
+%            [oo,stats] = signal2eventsByMinMaxLength(sc.abshf,minN,maxN,connectCloserThanN);
+%            toc
+           HFOInd(2)=HFOInd(1)+oo(2);
+           HFOwidthInd = abs(diff(HFOInd));
+  
+           Tied.HFOwidth_ms(IDied) = 1000*HFOwidthInd/fs;
            
-           [oo,stats] = signal2eventsByMinMaxLength(sc.abshf(Ind(1):Ind(2)),minN,maxN,connectShorterThanN);
-           oo
-           tic
-           [oo,stats] = signal2eventsByMinMaxLength(sc.abshf,minN,maxN,connectShorterThanN);
-           toc
-           
-           %%% tohle pujde pryc
-           [env,thr] = thresholdTwoClusterSignal(sc.abshf(Ind(1):Ind(2)), 200,false);
-           
-           iedWidth = min(find(env<thr))+preMargin;
-               
-           
-            Fpass = 200;
-            Fstop = 150;
-            Apass = 0.5;
-            Astop = 65;
-         
-            d = designfilt('highpassiir', ...
-              'PassbandFrequency',Fpass,'StopbandFrequency',Fstop, ...
-              'PassbandRipple',Apass,'StopbandAttenuation',Astop, ...
-              'DesignMethod','butter','SampleRate',fs);
-            %fvtool(d)
-            %fpass = 0.05; 
-            %[s_hp,dhp] = highpass(lf.T.Signal{lf.T.Title == 'sig'}(a:b),fpass,fs,'ImpulseResponse','iir','Steepness',0.5);  
-            
-            IEDsignalHFO = filtfilt(d,IEDsignal);
-            
-            [env,thr] = thresholdTwoClusterSignal(abs(IEDsignalHFO), 1,true);
-            
-          
-           
-           Tied.IEDwidth(IDied) = iedWidth/fs;
-           
-           Ind=ooRectify(IEDonoffInd(kied,[1 2])+[0 500],[1 numel(sc.med)]);
-           medMinMax = sc.med(Ind(1):Ind(2));
-           
-           Tied.IEDamp(IDied) = max(medMinMax)-min(medMinMax);
-           
-           Ind=ooRectify(IEDonoffInd(kied,[1 2])+[preMargin iedWidth+preMargin],[1 numel(sc.noDCnoArt)]);
-           [f,absH,faxis]= getFreqStockwell(sc.noDCnoArt(Ind(1):Ind(2)),fs);
+
+           % Frequency
+           %HFOInd=ooRectify(IEDonoffInd(kied,[1 2])+[preMargin HFOwidthInd+preMargin],[1 numel(sc.noDCnoArt)]);
+           [f,absH,faxis]= getFreqStockwell(sc.noDCnoArt(HFOInd(1):HFOInd(2)),fs,200,800);
            Tied.HFOfreq(IDied)  = f;
            Tied.HFOpwr(IDied) =   mean(sc.hf(IEDonoffInd(kied,1):IEDonoffInd(kied,2)).^2);   % rms value of filtred signal fd of the size rms_length
+           % bez odmocniny je to vykon, s odmocninou je to prumerna
+           % amplituda co doda stejny vykon
            
            plotit;
 

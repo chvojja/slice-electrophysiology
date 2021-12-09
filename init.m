@@ -70,7 +70,7 @@ function Tied = getTiedTemplate(Nrows)
 % this table is the main data type in the analysis
 % a row in the table represents a "block" - a part of EEG with parameters:
 varTypes = {'double', 'double',          'double',      'double',      'double',           'double',  'double', 'double'  , 'double'};
-varNames = {'IDied',        'IDblock',    'startInBlockI', 'endInBlockI', 'lastStimBefore',   'IEDwidth','IEDamp',  'HFOfreq','HFOpwr'};
+varNames = {'IDied',        'IDblock',    'startInBlockInd', 'endInBlockInd', 'lastStimBefore',   'HFOwidth_ms','IEDamp',  'HFOfreq','HFOpwr'};
 Tied = table('Size',[Nrows,numel(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
 end
 
