@@ -42,7 +42,7 @@ while true
             if numel(rezNumber)~=1, disp('Error, neidentifikoval jsem cislo rezu'); return; end;
             rezNumber = str2num(rezNumber{1});
             
-            inFileSamplePointer = 1; % this will serve us as a pointer that points to the part of the file to be analysed
+            inFileSamplePointer = 0; % this will serve us as a pointer that points to the part of the file to be analysed
             
             
 %          end
@@ -86,7 +86,7 @@ while true
             
             clear lf
             
-            
+            stimOnsetInd = find(s.stimOnsets);
         end
         
         % we have the correct file loaded, preprocessed, now let's find a block of EEG,
@@ -107,28 +107,38 @@ while true
         disp('analysis');
         
         % napocitat parametry aktualnniho bloku
-        %Tblock = getBlockParameters(Tblock);
-        
-        %sb = getBlockSignal(s)
         
         % get where next stimulation starts 
-        stimOnsetInd = find(s.stimOnsets);
+        if IDblock >1 && strcmp(char(Tblock.FileName(IDblock-1)),char(Tblock.FileName(IDblock)))
+            % this is when we read additional blocks inside the same file
+            inFileSamplePointer = round(Tblock.endSec(IDblock-1)*fs-5); % read where the previous block ended
+        else
+            inFileSamplePointer = 0;
+        end
+        
         futureStimOnsetsInd = stimOnsetInd(stimOnsetInd>inFileSamplePointer);
         nextStartInd = futureStimOnsetsInd(1);
         nextEndInd = futureStimOnsetsInd(    p.(char(Tblock.pulse(IDblock))).pulses   ) + round(p.(char(Tblock.pulse(IDblock))).periodSec*fs);
-        nextLenInd = nextEndInd - nextStartInd +1;
         
+        signalWasNotCropped = true;
+        if nextEndInd>numel(s.stim)
+            signalWasNotCropped = false;
+            nextEndInd = numel(s.stim);
+        end
+        
+        nextLenInd = nextEndInd - nextStartInd +1;
         
         
         % check if the observed stimuli matches the claimed one.
         claimedStimDurationSec = p.(char(Tblock.pulse(IDblock))).totalDurationSec;
         claimedDuty = p.(char(Tblock.pulse(IDblock))).percentHi;
         
-        deltaLen = (nextEndInd-nextStartInd) - round(claimedStimDurationSec*fs)  ;
-        deltaDuty = sum(s.stim(nextStartInd:nextEndInd))/nextLenInd   -  claimedDuty;
+        deltaLen = abs(     (nextEndInd-nextStartInd) - round(claimedStimDurationSec*fs)    ) ;
+        deltaDuty = abs(sum(s.stim(nextStartInd:nextEndInd))/nextLenInd   -  claimedDuty);
         
-        if deltaLen>1 | deltaDuty>0.001
+        if (deltaLen>1 & signalWasNotCropped) | (deltaDuty>0.1 & signalWasNotCropped)
             disp('nekonzistence mezi stimula?ním protokolem a skute?n? zm??enými daty!!!!');
+            return;
         end
 
       
@@ -197,7 +207,11 @@ while true
         
 
            allStimsBeforeIED = stimOnsetsInd<IEDonoffInd(kied,1);
-           Tied.lastStimBefore(IDied) = IEDonoffInd(kied,1) -  max( stimOnsetsInd(allStimsBeforeIED) );
+           closestStimulationBefore = max( stimOnsetsInd(allStimsBeforeIED) );
+           if isempty(closestStimulationBefore)
+               closestStimulationBefore=1;
+           end;
+           Tied.lastStimBefore(IDied) = IEDonoffInd(kied,1) -  closestStimulationBefore;
            % now width , amp, frequency...
            
            % IED amplitude 

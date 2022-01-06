@@ -76,6 +76,7 @@ yticks = linspace(1, Nfre, numel(yticklabels));
 set(gca, 'YTick', round(yticks), 'YTickLabel', flip(yticklabels(:)));
 set(gca,'XTick',[])
 ylabel('frequency, Hz');
+xlabel(['IED_ID:' num2str(IDied) ' IDblock:' num2str(IDblock)]);
 
 hold on;
 redLineY = Nfre-round(Nfre*(f-faxis(1))/abs(faxis(end)-faxis(1)));
@@ -99,10 +100,11 @@ xlabel('time, ms');
 
 if pt.subPlotPointer == pt.TotSubs % figure is full;
      hf = gcf;
-    fName = [ 'D:\tempErikaSST\plots_IEDs2'   '\lastIDblock_'   num2str(IDblock) '_lastIDied_' num2str(IDied)  ];
+    fName = [ 'D:\tempErikaSST\plots_IEDs'   '\lastIDblock_'   num2str(IDblock) '_lastIDied_' num2str(IDied)  ];
    %  fName = [ 'D:\tempErikaSST\plots_IEDs'   '\lastIDblock_'  ];
    
     print2png(hf,fName,[30  22],80);
+    pause(0.100);
 
      close(gcf);
     clear pt;

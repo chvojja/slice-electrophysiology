@@ -1,4 +1,4 @@
-clear all;
+%clear all;
 
 %% Definition of available stimuli
 % labels of stimulation parameters
@@ -10,8 +10,8 @@ p = struct;
 p = setProtocolStructByNameWidthPeriodPulses(p,'x100ms',0.1,3,50); % POZOR JE TO 100ms
 p = setProtocolStructByNameWidthPeriodPulses(p,'x500ms',0.5,5,100); %500ms 5s period 100pulses
 p = setProtocolStructByNameWidthPeriodPulses(p,'x1s',1,5,100);
-p = setProtocolStructByNameWidthPeriodPulses(p,'x3s',1,5,5);
-p = setProtocolStructByNameWidthPeriodPulses(p,'x10s',10,17.8,1);
+p = setProtocolStructByNameWidthPeriodPulses(p,'x3s',3,5,5);
+p = setProtocolStructByNameWidthPeriodPulses(p,'x10s',10,17.2,1);
 
 
 
@@ -69,8 +69,8 @@ function Tied = getTiedTemplate(Nrows)
 % definition of a table of blocks
 % this table is the main data type in the analysis
 % a row in the table represents a "block" - a part of EEG with parameters:
-varTypes = {'double', 'double',          'double',      'double',      'double',           'double',  'double', 'double'  , 'double'};
-varNames = {'IDied',        'IDblock',    'startInBlockInd', 'endInBlockInd', 'lastStimBefore',   'HFOwidth_ms','IEDamp',  'HFOfreq','HFOpwr'};
+varTypes = {'double', 'double',          'double',      'double',      'double',           'double',  'double',  'double'  , 'double' , 'logical'};
+varNames = {'IDied',        'IDblock',    'startInBlockInd', 'endInBlockInd', 'lastStimBefore',   'HFOwidth_ms','IEDamp',  'HFOfreq','HFOpwr','valid'};
 Tied = table('Size',[Nrows,numel(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
 end
 
