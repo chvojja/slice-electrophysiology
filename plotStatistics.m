@@ -1,19 +1,19 @@
 
-% % plot options
-% 
+% plot options
+
 % alpha = 0.65;
 % velikostKolecka = 80;
-% tloustkaCary = 1.2;
+tloustkaCary = 1.2;
+
+
+%% generate data
+Tblock = Tblock(1:76,:);
+Tied = Tied(1:4181,:);
 % 
 % 
-% %% generate data
-% Tblock = Tblock(1:76,:);
-% Tied = Tied(1:4181,:);
-% 
-% 
-% T = innerjoin(Tblock,Tied,'LeftKeys',1,'RightKeys',2);
-% 
-% T.G = findgroups(T.FileName,T.slice);
+ T = innerjoin(Tblock,Tied,'LeftKeys',1,'RightKeys',2);
+
+ T.G = findgroups(T.FileName,T.slice); % slice grouping
 
 %%
 % filterID=T.light=='noLight' | T.light=='light__' | T.pulse =='x500ms' | (T.pulse =='x100ms' &  );
@@ -262,6 +262,7 @@ end
 %st.(featureName)(:,1);
 
 [st.p,st.h] = signrank(st.(featureName)(:,1),st.(featureName)(:,2));
+%st.controlMean=st.(featureName)(:,1);
 end
 
 
