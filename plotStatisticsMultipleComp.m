@@ -1,0 +1,208 @@
+
+% plot options
+
+% alpha = 0.65;
+% velikostKolecka = 80;
+tloustkaCary = 1.2;
+
+
+%% generate data
+Tblock = Tblock(1:76,:);
+Tied = Tied(1:4181,:);
+% 
+% 
+ T = innerjoin(Tblock,Tied,'LeftKeys',1,'RightKeys',2);
+ T.G = findgroups(T.FileName,T.slice); % slice grouping
+
+%%
+% filterID=T.light=='noLight' | T.light=='light__' | T.pulse =='x500ms' | (T.pulse =='x100ms' &  );
+% Tf=T(filterID,:);
+% 
+% Tf.G_date_slice = findgroups(Tf.FileName,Tf.slice);
+
+Ns=numel(unique(T.G));
+
+Ntests = 4;
+
+
+st = struct;
+st.Tprism=NaN(Ntests,22);
+st.Tprism2=NaN(Ntests,22);
+
+plotDims = [17 22];
+
+%%
+featureNames = {'HFOwidth_ms','HFOfreq','HFOpwr','IEDamp'};
+pulseType = 'x500ms';
+%treatmentLight = {'light__','light___'};
+treatmentLight = {'light___'};
+
+
+for i = 1:Ntests
+    featureName = featureNames{i};
+    st = getStats(T, st,Ns, featureName,pulseType,treatmentLight);
+    
+    out = st.(featureName);
+    percents = 100*([out(:,2)./out(:,1)]-1);
+    st.TprismPercent(i,:) = [zeros(1,11) percents'  ];
+    %st.TprismRatios(i,:) = [ones(1,11) [out(:,2)./out(:,1)]'  ];
+    st.Tprism(i,:) = [out(:,1)'  out(:,2)'];
+    
+    if i ==3
+        [p(i),h] = signrank(percents)
+    else
+    [h, p(i)] = ttest(percents);
+    end
+    
+end
+
+
+[c_pvalues] = fwer_sidak(p, 0.05)
+
+
+
+%% functions
+
+
+function st = getStats(T, st,Ns ,featureName,pulseType,treatmentLight)
+
+st.(featureName)=NaN(Ns,2); % first row is control, second is  tratment
+
+for groupNum=1:Ns
+
+Ts = T(T.G==groupNum,:);
+% Ts.light,Ts.pulse
+[G_light_pulse,GTsID] = findgroups(Ts(:,[8 9]));
+%G_light_pulse = findgroups(Ts.light,Ts.pulse);
+Ts.G = G_light_pulse;
+
+controlID = find(GTsID.light == 'noLight' & GTsID.pulse ==pulseType);
+treatmentID = find(GTsID.light == treatmentLight & GTsID.pulse ==pulseType);
+
+if (~isempty(controlID)) & (~isempty(treatmentID) )
+Y = varfun(@mean,Ts,'InputVariables',featureName,'GroupingVariables','G');
+st.(featureName)(groupNum,1) = Y{controlID,3};
+st.(featureName)(groupNum,2) = Y{treatmentID,3};
+end
+
+end
+
+%st.(featureName)(:,1);
+
+[st.p,st.h] = signrank(st.(featureName)(:,1),st.(featureName)(:,2));
+%st.controlMean=st.(featureName)(:,1);
+end
+
+
+
+
+function [means,sems] = getAllHistCounts(dataset,subjects,edges)
+% dataset has each column for each subject and may contain NaNs
+perctls = [0.01 99.99];
+%perctls = [0.05 99.5];
+    for col = subjects
+    notNaNs=~isnan(dataset(:,col));
+    data = dataset(notNaNs,col);
+    % tds=st.timeDiffLvsCms(notNaNs,col);
+    % tds = rmoutliers(tds,'percentiles',perctls);
+    % histogram(tds,edges,'Normalization','probability');
+    % hold on;
+    % tds=st.timeDiffLvsPLms(notNaNs,col);
+    % tds = rmoutliers(tds,'percentiles',perctls);
+    % histogram(tds,edges,'Normalization','probability');
+
+
+    x = rmoutliers(data,'percentiles',perctls);
+
+    [hCounts,edges,bin] = histcounts(x,edges,'Normalization','probability');
+
+    hCountsAll(col,:)=hCounts;
+
+    end
+ N=numel(subjects);
+ if N>1
+    means= mean(hCountsAll(subjects,:));
+    sems=std(hCountsAll(subjects,:))/sqrt(N);
+ else
+    means =  hCountsAll(subjects,:);
+    sems=zeros(size(means));
+ end
+end
+
+
+function plotMeanSEM(means,sems,velikostKolecka,tloustkaCary,color,alpha,typ)
+% means=[10 5 8 4 3];
+% sems=[2 1 1.5 0.8 0.5 ];
+% timeline = 0.5:1:4.5;
+% velikostKolecka = 150;
+% tloustkaCary = 2;
+
+Nbars=numel(means);
+
+for i=1:Nbars
+    x=i;
+    y = means(i);
+    err = sems(i);
+    
+    switch nargin
+        case 7
+        hb = scatter(x,y,velikostKolecka,'ko','LineWidth',tloustkaCary); 
+        set(hb,'MarkerFaceColor',color);  
+        
+        
+        case 6
+        hb = bar(x,y,'LineWidth',tloustkaCary,'FaceColor',color,'FaceAlpha',alpha);
+   
+    end
+        
+    
+    hold on;
+    errorbar(x,y,-err,err,'LineWidth',tloustkaCary,'Color',color);
+    
+end
+
+
+
+
+set(gca,'XLim',[0 Nbars+1],'YLim',[0 max(means+sems)*1.1]);
+xticks =1:Nbars;
+set(gca,'XTick',xticks);
+set(gca,'TickLength',[0 0]);
+% XTickLabel {'a','b'...}
+hold off;
+end
+
+
+function plotBoxPlot(data,velikostKolecka,alpha,filledon)
+color = [0 0 0];
+wspacing=2;
+dabs = 0.4;
+Ncol = size(data,2);
+xbars = [1:Ncol]*wspacing-dabs;
+xpoints = [1:Ncol]*wspacing+dabs;
+
+if size(data,1)>100
+boxplot(data, 'positions', xbars, 'labels', xbars,'Colors','k','PlotStyle','traditional','symbol', '','Notch','on');
+else
+boxplot(data, 'positions', xbars, 'labels', xbars,'Colors','k','PlotStyle','traditional','symbol', '');
+end;
+
+hold on;
+
+for col=1:Ncol
+    scdata = data(~isnan(data(:,col)),col);
+    rozmitani = ([(randn(size(scdata))-0.5)/25]);
+    hb = scatter(xpoints(col)*ones(size(scdata))+rozmitani,scdata,velikostKolecka); %,'MarkerEdgeColor',color
+    
+    if nargin >3
+        hb = scatter(xpoints(col)*ones(size(scdata))+rozmitani,scdata,velikostKolecka,'filled'); 
+    end
+    set(hb,'MarkerFaceColor',color,'MarkerEdgeColor',color,'MarkerEdgeAlpha',alpha,'MarkerFaceAlpha',alpha);
+    
+end
+
+plot(xpoints(:,[1 2]),data')
+set(gca,'XLim',[0 max(xpoints) + 2*dabs]);
+box off;
+end
+
